@@ -5,6 +5,9 @@ This tool fetches and summarizes daily news articles.
 
 import os
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from perplexity import Perplexity
@@ -260,6 +263,125 @@ def save_brief_to_file(brief, config):
     return filepath
 
 
+def format_brief_for_email(brief, config):
+    """Format the brief as HTML email content."""
+    date_format = config.get("date_format", "%B %d, %Y")
+    current_date = datetime.now().strftime(date_format)
+    
+    html_content = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+            h2 {{ color: #34495e; margin-top: 30px; border-left: 4px solid #3498db; padding-left: 10px; }}
+            .article {{ margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px; }}
+            .article-title {{ font-weight: bold; color: #2c3e50; font-size: 1.1em; }}
+            .article-summary {{ margin: 10px 0; color: #555; }}
+            .article-url {{ color: #3498db; text-decoration: none; }}
+            .article-url:hover {{ text-decoration: underline; }}
+            .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #777; font-size: 0.9em; }}
+        </style>
+    </head>
+    <body>
+        <h1>📰 Daily News Brief</h1>
+        <p><strong>Date:</strong> {current_date}</p>
+    """
+    
+    total_articles = 0
+    for topic, articles in brief.items():
+        if not articles:
+            continue
+        
+        total_articles += len(articles)
+        html_content += f'<h2>📌 {topic.upper()}</h2>\n'
+        
+        for i, article in enumerate(articles, 1):
+            html_content += f"""
+            <div class="article">
+                <div class="article-title">{i}. {article['title']}</div>
+                <div class="article-summary">{article['summary']}</div>
+                <div><a href="{article['url']}" class="article-url">🔗 Read more</a></div>
+            </div>
+            """
+    
+    html_content += f"""
+        <div class="footer">
+            <p>Total articles: {total_articles}</p>
+            <p>Generated automatically by News Summarizer</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Plain text version
+    text_content = f"Daily News Brief - {current_date}\n"
+    text_content += "=" * 80 + "\n\n"
+    
+    for topic, articles in brief.items():
+        if not articles:
+            continue
+        text_content += f"{topic.upper()}\n"
+        text_content += "-" * 80 + "\n\n"
+        
+        for i, article in enumerate(articles, 1):
+            text_content += f"{i}. {article['title']}\n"
+            text_content += f"   {article['summary']}\n"
+            text_content += f"   {article['url']}\n\n"
+    
+    return html_content, text_content
+
+
+def send_email(brief, config):
+    """Send the brief via email using Gmail SMTP."""
+    email_config = config.get("email", {})
+    
+    # Check if email is configured
+    if not email_config.get("enabled", False):
+        return False, "Email not enabled in config"
+    
+    sender_email = email_config.get("sender_email")
+    sender_password = email_config.get("sender_password") or os.getenv("GMAIL_APP_PASSWORD")
+    recipient_email = email_config.get("recipient_email", sender_email)
+    smtp_server = email_config.get("smtp_server", "smtp.gmail.com")
+    smtp_port = email_config.get("smtp_port", 587)
+    
+    if not sender_email or not sender_password:
+        return False, "Email credentials not configured"
+    
+    try:
+        # Format email content
+        html_content, text_content = format_brief_for_email(brief, config)
+        
+        # Create message
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"News Brief - {datetime.now().strftime(config.get('date_format', '%B %d, %Y'))}"
+        msg["From"] = sender_email
+        msg["To"] = recipient_email
+        
+        # Add both plain text and HTML versions
+        part1 = MIMEText(text_content, "plain")
+        part2 = MIMEText(html_content, "html")
+        
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Send email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+        
+        return True, f"Email sent successfully to {recipient_email}"
+    
+    except smtplib.SMTPAuthenticationError:
+        return False, "Email authentication failed. Check your Gmail app password."
+    except smtplib.SMTPException as e:
+        return False, f"SMTP error: {str(e)}"
+    except Exception as e:
+        return False, f"Error sending email: {str(e)}"
+
+
 def main():
     """Main function to run the daily news summarizer."""
     try:
@@ -284,15 +406,32 @@ def main():
         
         # Handle saving to file
         auto_save = config.get("auto_save", False)
+        filepath = None
         
         if auto_save:
             filepath = save_brief_to_file(brief, config)
             print(f"\n✅ Brief automatically saved to {filepath}")
         else:
-            save_to_file = input("\n💾 Save brief to file? (y/n): ").lower() == 'y'
-            if save_to_file:
+            # In automated mode, skip user input
+            if not config.get("email", {}).get("enabled", False):
+                save_to_file = input("\n💾 Save brief to file? (y/n): ").lower() == 'y'
+                if save_to_file:
+                    filepath = save_brief_to_file(brief, config)
+                    print(f"✅ Brief saved to {filepath}")
+            else:
+                # Auto-save when email is enabled (automated mode)
                 filepath = save_brief_to_file(brief, config)
-                print(f"✅ Brief saved to {filepath}")
+                print(f"\n✅ Brief saved to {filepath}")
+        
+        # Send email if configured
+        email_config = config.get("email", {})
+        if email_config.get("enabled", False):
+            print("\n📧 Sending email...")
+            success, message = send_email(brief, config)
+            if success:
+                print(f"✅ {message}")
+            else:
+                print(f"❌ {message}")
     
     except Exception as e:
         print(f"❌ Error: {e}")

@@ -1,292 +1,192 @@
-# News Scraper with Perplexity API
+# News Summarizer with Perplexity API
 
-A Python tool that uses the Perplexity API to fetch and summarize daily news articles.
+A Python tool that automatically fetches, summarizes, and emails daily news briefs using Perplexity's AI-powered search and summarization.
 
-## 🚀 Quick Start
+## 🎯 What It Does
 
-### 1. Installation
+- **Fetches news** from multiple topics using Perplexity's real-time web search
+- **Summarizes articles** using AI to extract key facts and main points
+- **Sends formatted emails** with HTML-styled briefs
+- **Runs automatically** every 3 days via Windows Task Scheduler
+- **Saves briefs** to local files for archive
+
+## 📚 How It Works
+
+1. **Search API** - Perplexity searches the web in real-time for your topics
+2. **Date Filtering** - Only gets articles from the specified date range
+3. **AI Summarization** - Uses Perplexity's language model to create concise summaries
+4. **Email Delivery** - Sends formatted HTML email via Gmail SMTP
+5. **File Archive** - Saves briefs locally for reference
+
+## 🚀 Quick Setup
+
+### 1. Install Dependencies
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Setup API Key
+### 2. Configure API Keys
 
-1. Get your Perplexity API key from [Perplexity API Portal](https://www.perplexity.ai/settings/api)
-2. Create a `.env` file in the project root:
-   ```bash
-   cp .env.example .env
-   ```
-3. Add your API key to `.env`:
-   ```
-   PERPLEXITY_API_KEY=your_actual_api_key_here
-   ```
+Create a `.env` file in the project root:
 
-### 3. Run the Scripts
-
-**Simple Example:**
-```bash
-python perplexity_example.py
+```
+PERPLEXITY_API_KEY=your_perplexity_api_key
+GMAIL_APP_PASSWORD=your_gmail_app_password
 ```
 
-**Daily News Summarizer:**
+**Get your keys:**
+- Perplexity API: https://www.perplexity.ai/settings/api
+- Gmail App Password: https://myaccount.google.com/apppasswords
+  - Enable 2-Step Verification first
+  - Generate password for "Mail" → "Windows Computer"
+
+### 3. Configure Topics
+
+Edit `config.json` to set your news topics:
+
+```json
+{
+  "topics": [
+    "technology companies announce",
+    "venture capital",
+    "vietnam technology"
+  ],
+  "articles_per_topic": 3,
+  "days_back": 3
+}
+```
+
+### 4. Set Up Email
+
+Edit `config.json` email section:
+
+```json
+{
+  "email": {
+    "enabled": true,
+    "sender_email": "your-email@gmail.com",
+    "sender_password": "",
+    "recipient_email": "your-email@gmail.com"
+  },
+  "auto_save": true
+}
+```
+
+Leave `sender_password` empty - it uses `GMAIL_APP_PASSWORD` from `.env`.
+
+### 5. Test It
+
 ```bash
 python news_summarizer.py
 ```
 
-## 📚 How It Works
+You should receive an email with your news brief!
 
-### Perplexity API Overview
+### 6. Schedule Automatic Runs
 
-The Perplexity API provides two main capabilities:
+**Windows Task Scheduler:**
 
-1. **Search API** - Fetches real-time web search results (including news articles)
-2. **Chat Completions API** - Generates AI-powered summaries and responses
+1. Open Task Scheduler (`Win + R` → `taskschd.msc`)
+2. Create Basic Task:
+   - **Name:** `News Summarizer`
+   - **Trigger:** Daily, Recur every **3 days**, Time: `08:00`
+   - **Action:** Start program → Browse to `run_scheduled.bat`
+   - **Start in:** `D:\Coding\News_Scraper` (your project path)
+3. Test: Right-click task → **Run**
 
-### Architecture
+**Alternative - Python Scheduler:**
 
+```bash
+python scheduler.py
 ```
-┌─────────────────┐
-│  News Summarizer│
-└────────┬────────┘
-         │
-         ├───> Search API (fetch news articles)
-         │
-         └───> Chat Completions API (generate summaries)
+
+Runs every 3 days at 8:00 AM (keeps running in background).
+
+## ⚙️ Configuration Options
+
+Edit `config.json` to customize:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `topics` | List of news topics to track | `["general news"]` |
+| `articles_per_topic` | Number of articles per topic | `5` |
+| `days_back` | Days to look back for news | `1` |
+| `max_tokens` | Summary length (100-500) | `200` |
+| `model` | Perplexity model (`sonar`, `sonar-medium`, etc.) | `"sonar"` |
+| `auto_save` | Auto-save briefs to file | `false` |
+| `email.enabled` | Enable email sending | `false` |
+
+## 📧 Email Features
+
+- **HTML formatted** with styled layout
+- **Clickable article links**
+- **Organized by topic**
+- **Plain text fallback** for email clients
+- **Automatic sending** when enabled
+
+## 📁 Output
+
+- **Console:** Formatted brief display
+- **Email:** HTML-styled email sent to your inbox
+- **Files:** Saved to `briefs/` folder as `news_brief_YYYYMMDD.txt`
+
+## 🔧 Troubleshooting
+
+**No email received?**
+- Check `email.enabled` is `true` in config
+- Verify Gmail app password in `.env`
+- Check spam folder
+- Test manually: `python news_summarizer.py`
+
+**Scheduler not running?**
+- Verify Task Scheduler task is enabled
+- Check task history for errors
+- Verify `run_scheduled.bat` path is correct
+
+**Few articles per topic?**
+- Increase `days_back` (e.g., `3` for last 3 days)
+- Adjust `articles_per_topic` based on topic popularity
+- Some topics naturally have fewer daily articles
+
+## 🛠️ Advanced Usage
+
+### Custom Topics
+
+Use specific, action-oriented queries for better results:
+
+```json
+{
+  "topics": [
+    "technology companies announce",
+    "venture capital funding",
+    "startup acquisitions",
+    "vietnam technology"
+  ]
+}
 ```
 
-### Key Components
+### Adjust Summary Length
 
-#### 1. **Search API** (`client.search.create()`)
+```json
+{
+  "max_tokens": 300  // Longer summaries (default: 200)
+}
+```
 
-Fetches news articles from the web with various filtering options:
+### Change Schedule Frequency
 
-**Parameters:**
-- `query` (string): Search query (e.g., "technology news today")
-- `max_results` (int): Maximum number of results (default: 5)
-- `search_after_date_filter` (string): Filter news after this date (format: "MM/DD/YYYY")
-- `search_before_date_filter` (string): Filter news before this date (format: "MM/DD/YYYY")
-
-**Returns:**
-- List of article objects with:
-  - `title`: Article title
-  - `url`: Source URL
-  - `snippet`: Article preview/snippet
-
-#### 2. **Chat Completions API** (`client.chat.completions.create()`)
-
-Generates AI summaries using Perplexity's language model:
-
-**Parameters:**
-- `model` (string): Model to use (e.g., "sonar-small", "sonar-medium", "sonar-large", "sonar-pro")
-- `messages` (list): List of message objects with `role` and `content`
-- `max_tokens` (int): Maximum length of the response (default: 150)
-
-**Returns:**
-- Response object with generated text in `choices[0].message.content`
-
-## 🛠️ Available Options & Customizations
-
-### Search API Options
-
+Edit `scheduler.py`:
 ```python
-# Basic search
-search = client.search.create(
-    query="your search query",
-    max_results=10
-)
-
-# Date-filtered search (for daily news)
-search = client.search.create(
-    query="technology news",
-    max_results=5,
-    search_after_date_filter="12/01/2024",   # News from Dec 1, 2024 onwards
-    search_before_date_filter="12/02/2024"    # Up to Dec 2, 2024
-)
-
-# Topic-specific search
-search = client.search.create(
-    query="AI developments in healthcare",
-    max_results=10
-)
+schedule.every(2).days.at("09:00").do(run_news_summarizer)  // Every 2 days at 9 AM
 ```
-
-### Chat Completions API Options
-
-```python
-# Short summary
-response = client.chat.completions.create(
-    model="sonar-small",
-    messages=[
-        {"role": "user", "content": "Summarize: [article text]"}
-    ],
-    max_tokens=100
-)
-summary = response.choices[0].message.content
-
-# Detailed summary
-response = client.chat.completions.create(
-    model="sonar-medium",
-    messages=[
-        {"role": "user", "content": "Provide a detailed summary: [article text]"}
-    ],
-    max_tokens=300
-)
-
-# Custom prompts
-response = client.chat.completions.create(
-    model="sonar-small",
-    messages=[
-        {"role": "user", "content": "Extract key facts from: [article text]"}
-    ],
-    max_tokens=200
-)
-```
-
-### NewsSummarizer Class Methods
-
-#### `fetch_news(topic, max_results, days_back)`
-- Fetch news for a specific topic
-- Filter by number of days back
-- Returns list of article objects
-
-#### `summarize_article(article, max_tokens)`
-- Generate summary for a single article
-- Customizable summary length
-
-#### `create_daily_brief(topics, articles_per_topic)`
-- Create a comprehensive daily brief
-- Support multiple topics
-- Returns organized dictionary
-
-## 📝 Usage Examples
-
-### Example 1: Fetch Today's Technology News
-
-```python
-from news_summarizer import NewsSummarizer
-
-summarizer = NewsSummarizer()
-articles = summarizer.fetch_news(
-    topic="technology news",
-    max_results=5,
-    days_back=1
-)
-
-for article in articles:
-    print(f"{article.title}: {article.url}")
-```
-
-### Example 2: Create Multi-Topic Daily Brief
-
-```python
-summarizer = NewsSummarizer()
-
-brief = summarizer.create_daily_brief(
-    topics=["technology", "politics", "sports"],
-    articles_per_topic=3
-)
-
-summarizer.print_brief(brief)
-```
-
-### Example 3: Custom Summary Length
-
-```python
-article = articles[0]
-summary = summarizer.summarize_article(
-    article,
-    max_tokens=500  # Longer, more detailed summary
-)
-```
-
-## 🔧 Advanced Customization
-
-### Custom Date Ranges
-
-```python
-from datetime import datetime, timedelta
-
-# Get news from last week
-week_ago = (datetime.now() - timedelta(days=7)).strftime("%m/%d/%Y")
-today = datetime.now().strftime("%m/%d/%Y")
-
-search = client.search.create(
-    query="technology news",
-    search_after_date_filter=week_ago,
-    search_before_date_filter=today,
-    max_results=20
-)
-```
-
-### Filtering by Source
-
-You can filter results by checking the `url` field:
-
-```python
-articles = summarizer.fetch_news("technology")
-techcrunch_articles = [a for a in articles if "techcrunch" in a.url.lower()]
-```
-
-### Batch Processing
-
-```python
-# Process multiple topics in parallel
-topics = ["AI", "cryptocurrency", "climate change"]
-all_articles = {}
-
-for topic in topics:
-    all_articles[topic] = summarizer.fetch_news(topic, max_results=5)
-```
-
-## 📊 Output Formats
-
-The tool can output in multiple formats:
-
-1. **Console Output** - Formatted text display
-2. **Text File** - Save to `.txt` file (interactive prompt)
-3. **JSON** - Modify code to return JSON structure
-4. **Email** - Integrate with email libraries to send daily briefs
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-- `PERPLEXITY_API_KEY`: Your Perplexity API key (required)
-
-### Rate Limits
-
-Be aware of Perplexity API rate limits:
-- Check your plan's limits at the [API Portal](https://www.perplexity.ai/settings/api)
-- Consider adding delays between requests for large batches
-
-## 🚨 Error Handling
-
-The scripts include basic error handling:
-- Missing API key detection
-- Network error handling
-- Invalid date format validation
-
-## 🔮 Future Enhancements
-
-Potential improvements:
-- [ ] Schedule daily runs with cron/scheduler
-- [ ] Email delivery of daily briefs
-- [ ] Database storage for historical summaries
-- [ ] Web dashboard for viewing summaries
-- [ ] RSS feed generation
-- [ ] Multi-language support
-- [ ] Sentiment analysis
-- [ ] Keyword extraction
 
 ## 📖 Resources
 
-- [Perplexity API Documentation](https://docs.perplexity.ai/)
+- [Perplexity API Docs](https://docs.perplexity.ai/)
 - [Perplexity API Portal](https://www.perplexity.ai/settings/api)
-- [Python SDK Guide](https://docs.perplexity.ai/guides/perplexity-sdk)
+- [Gmail App Passwords](https://myaccount.google.com/apppasswords)
 
 ## 📄 License
 
-This project is open source and available for personal use.
-
+Open source for personal use.
