@@ -47,11 +47,11 @@ def load_config(config_path="config.json"):
                 # Merge with defaults (user config overrides defaults)
                 default_config.update(user_config)
         except json.JSONDecodeError as e:
-            print(f"⚠️  Warning: Invalid JSON in {config_path}. Using defaults. Error: {e}")
+            print(f"[WARNING] Invalid JSON in {config_path}. Using defaults. Error: {e}")
         except Exception as e:
-            print(f"⚠️  Warning: Error reading {config_path}. Using defaults. Error: {e}")
+            print(f"[WARNING] Error reading {config_path}. Using defaults. Error: {e}")
     else:
-        print(f"ℹ️  No config file found at {config_path}. Using defaults.")
+        print(f"[INFO] No config file found at {config_path}. Using defaults.")
     
     return default_config
 
@@ -111,7 +111,7 @@ class NewsSummarizer:
         before_date = today.strftime("%m/%d/%Y")
         after_date = (today - timedelta(days=days_back)).strftime("%m/%d/%Y")
         
-        print(f"🔍 Searching for {topic} from {after_date} to {before_date}...")
+        print(f"[SEARCH] Searching for {topic} from {after_date} to {before_date}...")
         
         # Build query with configurable suffix
         query = f"{topic} {self.query_suffix}" if self.query_suffix else topic
@@ -170,17 +170,17 @@ Content: {article.snippet}"""
         brief = {}
         
         for topic in topics:
-            print(f"\n📰 Processing {topic}...")
+            print(f"\n[PROCESSING] Processing {topic}...")
             articles = self.fetch_news(topic, max_results=articles_per_topic)
             
             # Handle case where fewer articles are returned than requested
             if len(articles) == 0:
-                print(f"   ⚠️  No articles found for {topic}")
+                print(f"   [WARNING] No articles found for {topic}")
                 brief[topic] = []
                 continue
             
             if len(articles) < articles_per_topic:
-                print(f"   ℹ️  Found {len(articles)} articles (requested {articles_per_topic})")
+                print(f"   [INFO] Found {len(articles)} articles (requested {articles_per_topic})")
             
             # Remove duplicates based on URL
             seen_urls = set()
@@ -191,7 +191,7 @@ Content: {article.snippet}"""
                     unique_articles.append(article)
             
             if len(unique_articles) < len(articles):
-                print(f"   ℹ️  Removed {len(articles) - len(unique_articles)} duplicate article(s)")
+                print(f"   [INFO] Removed {len(articles) - len(unique_articles)} duplicate article(s)")
             
             topic_summaries = []
             for article in unique_articles:
@@ -204,18 +204,18 @@ Content: {article.snippet}"""
                         "snippet": article.snippet
                     })
                 except Exception as e:
-                    print(f"   ⚠️  Error summarizing article '{article.title}': {e}")
+                    print(f"   [WARNING] Error summarizing article '{article.title}': {e}")
                     continue
             
             brief[topic] = topic_summaries
-            print(f"   ✅ Processed {len(topic_summaries)} article(s) for {topic}")
+            print(f"   [SUCCESS] Processed {len(topic_summaries)} article(s) for {topic}")
         
         return brief
     
     def print_brief(self, brief):
         """Print the daily brief in a formatted way."""
         print("\n" + "=" * 80)
-        print("📰 DAILY NEWS BRIEF")
+        print("DAILY NEWS BRIEF")
         print("=" * 80)
         print(f"Date: {datetime.now().strftime(self.date_format)}\n")
         
@@ -224,13 +224,13 @@ Content: {article.snippet}"""
                 continue  # Skip empty topics
             
             print(f"\n{'=' * 80}")
-            print(f"📌 {topic.upper()}")
+            print(f">>> {topic.upper()}")
             print(f"{'=' * 80}\n")
             
             for i, article in enumerate(articles, 1):
                 print(f"{i}. {article['title']}")
                 print(f"   {article['summary']}")
-                print(f"   🔗 {article['url']}\n")
+                print(f"   Link: {article['url']}\n")
         
         print("=" * 80)
 
@@ -284,7 +284,7 @@ def format_brief_for_email(brief, config):
         </style>
     </head>
     <body>
-        <h1>📰 Daily News Brief</h1>
+        <h1>Daily News Brief</h1>
         <p><strong>Date:</strong> {current_date}</p>
     """
     
@@ -294,14 +294,14 @@ def format_brief_for_email(brief, config):
             continue
         
         total_articles += len(articles)
-        html_content += f'<h2>📌 {topic.upper()}</h2>\n'
+        html_content += f'<h2>{topic.upper()}</h2>\n'
         
         for i, article in enumerate(articles, 1):
             html_content += f"""
             <div class="article">
                 <div class="article-title">{i}. {article['title']}</div>
                 <div class="article-summary">{article['summary']}</div>
-                <div><a href="{article['url']}" class="article-url">🔗 Read more</a></div>
+                <div><a href="{article['url']}" class="article-url">Read more</a></div>
             </div>
             """
     
@@ -406,35 +406,38 @@ def main():
         
         # Handle saving to file
         auto_save = config.get("auto_save", False)
+        email_enabled = config.get("email", {}).get("enabled", False)
         filepath = None
         
-        if auto_save:
+        # Auto-save if enabled OR if email is enabled (automated mode)
+        if auto_save or email_enabled:
             filepath = save_brief_to_file(brief, config)
-            print(f"\n✅ Brief automatically saved to {filepath}")
+            print(f"\n[SUCCESS] Brief automatically saved to {filepath}")
         else:
-            # In automated mode, skip user input
-            if not config.get("email", {}).get("enabled", False):
-                save_to_file = input("\n💾 Save brief to file? (y/n): ").lower() == 'y'
+            # Only ask for user input in interactive mode (no email, no auto-save)
+            try:
+                save_to_file = input("\n[SAVE] Save brief to file? (y/n): ").lower() == 'y'
                 if save_to_file:
                     filepath = save_brief_to_file(brief, config)
-                    print(f"✅ Brief saved to {filepath}")
-            else:
-                # Auto-save when email is enabled (automated mode)
+                    print(f"[SUCCESS] Brief saved to {filepath}")
+            except EOFError:
+                # Running in non-interactive mode (e.g., Task Scheduler)
+                # Save automatically
                 filepath = save_brief_to_file(brief, config)
-                print(f"\n✅ Brief saved to {filepath}")
+                print(f"\n[SUCCESS] Brief saved to {filepath} (non-interactive mode)")
         
         # Send email if configured
         email_config = config.get("email", {})
         if email_config.get("enabled", False):
-            print("\n📧 Sending email...")
+            print("\n[EMAIL] Sending email...")
             success, message = send_email(brief, config)
             if success:
-                print(f"✅ {message}")
+                print(f"[SUCCESS] {message}")
             else:
-                print(f"❌ {message}")
+                print(f"[ERROR] {message}")
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] Error: {e}")
         print("\nMake sure you have:")
         print("1. Set PERPLEXITY_API_KEY in your .env file")
         print("2. Installed required packages: pip install -r requirements.txt")
