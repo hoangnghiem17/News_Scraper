@@ -6,6 +6,8 @@ This tool fetches and summarizes daily news articles.
 import os
 import json
 import smtplib
+import sys
+import unicodedata
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -14,6 +16,39 @@ from perplexity import Perplexity
 
 # Load environment variables
 load_dotenv()
+
+
+def safe_print(text):
+    """
+    Safely print text to console, handling Unicode characters that Windows console can't display.
+    Replaces problematic characters with ASCII equivalents.
+    """
+    if sys.stdout.encoding is None:
+        encoding = 'utf-8'
+    else:
+        encoding = sys.stdout.encoding
+    
+    try:
+        # Try to print normally first
+        print(text)
+    except UnicodeEncodeError:
+        # If that fails, normalize and replace problematic characters
+        # Replace special Unicode characters with ASCII equivalents
+        safe_text = text.replace('\u2011', '-')  # Non-breaking hyphen
+        safe_text = safe_text.replace('\u2013', '-')  # En dash
+        safe_text = safe_text.replace('\u2014', '--')  # Em dash
+        safe_text = safe_text.replace('\u2018', "'")  # Left single quote
+        safe_text = safe_text.replace('\u2019', "'")  # Right single quote
+        safe_text = safe_text.replace('\u201c', '"')  # Left double quote
+        safe_text = safe_text.replace('\u201d', '"')  # Right double quote
+        safe_text = safe_text.replace('\u2022', '*')  # Bullet
+        safe_text = safe_text.replace('\u2026', '...')  # Ellipsis
+        safe_text = safe_text.replace('\u20ac', 'EUR')  # Euro sign
+        safe_text = safe_text.replace('\xa0', ' ')  # Non-breaking space
+        
+        # As a last resort, encode and decode to remove any remaining problematic chars
+        safe_text = safe_text.encode(encoding, errors='replace').decode(encoding)
+        print(safe_text)
 
 
 def load_config(config_path="config.json"):
@@ -214,25 +249,25 @@ Content: {article.snippet}"""
     
     def print_brief(self, brief):
         """Print the daily brief in a formatted way."""
-        print("\n" + "=" * 80)
-        print("DAILY NEWS BRIEF")
-        print("=" * 80)
-        print(f"Date: {datetime.now().strftime(self.date_format)}\n")
+        safe_print("\n" + "=" * 80)
+        safe_print("DAILY NEWS BRIEF")
+        safe_print("=" * 80)
+        safe_print(f"Date: {datetime.now().strftime(self.date_format)}\n")
         
         for topic, articles in brief.items():
             if not articles:
                 continue  # Skip empty topics
             
-            print(f"\n{'=' * 80}")
-            print(f">>> {topic.upper()}")
-            print(f"{'=' * 80}\n")
+            safe_print(f"\n{'=' * 80}")
+            safe_print(f">>> {topic.upper()}")
+            safe_print(f"{'=' * 80}\n")
             
             for i, article in enumerate(articles, 1):
-                print(f"{i}. {article['title']}")
-                print(f"   {article['summary']}")
-                print(f"   Link: {article['url']}\n")
+                safe_print(f"{i}. {article['title']}")
+                safe_print(f"   {article['summary']}")
+                safe_print(f"   Link: {article['url']}\n")
         
-        print("=" * 80)
+        safe_print("=" * 80)
 
 
 def save_brief_to_file(brief, config):
@@ -401,8 +436,12 @@ def main():
             articles_per_topic=articles_per_topic
         )
         
-        # Print the brief
-        summarizer.print_brief(brief)
+        # Print the brief (wrapped in try-except to ensure email sends even if printing fails)
+        try:
+            summarizer.print_brief(brief)
+        except Exception as e:
+            print(f"[WARNING] Error printing brief to console: {e}")
+            print("[INFO] Continuing with file save and email...")
         
         # Handle saving to file
         auto_save = config.get("auto_save", False)
