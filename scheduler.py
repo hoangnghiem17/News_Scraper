@@ -1,5 +1,5 @@
 """
-Scheduler script to run news summarizer every 3 days.
+Scheduler script to run news summarizer weekly.
 This script can run as a background service or be scheduled via Windows Task Scheduler.
 """
 
@@ -32,16 +32,14 @@ def run_immediately():
 
 
 if __name__ == "__main__":
-    # Schedule to run every 3 days at 8:00 AM
-    schedule.every(3).days.at("08:00").do(run_news_summarizer)
+    # Schedule to run every 7 days (Weekly) at 09:00 AM
+    schedule.every(7).days.at("09:00").do(run_news_summarizer)
     
-    # Alternative: Run at specific time every 3 days
-    # schedule.every().monday.at("08:00").do(run_news_summarizer)  # Every Monday
-    # schedule.every().wednesday.at("08:00").do(run_news_summarizer)  # Every Wednesday
-    # schedule.every().friday.at("08:00").do(run_news_summarizer)  # Every Friday
+    # Alternative: Run every Friday
+    # schedule.every().friday.at("09:00").do(run_news_summarizer)
     
     print("📅 News Summarizer Scheduler Started")
-    print(f"⏰ Will run every 3 days at 08:00 AM")
+    print(f"⏰ Will run every 7 days at 09:00 AM")
     print(f"🕐 Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"⏳ Next run: {schedule.next_run()}")
     print("\nPress Ctrl+C to stop the scheduler\n")

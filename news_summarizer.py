@@ -18,6 +18,82 @@ from perplexity import Perplexity
 load_dotenv()
 
 
+def is_aggregator_page(url, title):
+    """
+    Detect if a result is likely an aggregator/portal page rather than a specific article.
+    
+    Args:
+        url: The URL of the page
+        title: The title of the page
+    
+    Returns:
+        True if likely an aggregator page, False otherwise
+    """
+    if not url or not title:
+        return False
+    
+    # URL patterns that indicate aggregator/portal pages
+    aggregator_url_patterns = [
+        '/index', '/home', '/news$', '/section/',
+        '/category/', '/tech$', '/business$',
+        '/markets$', '/industry/', '/newsroom$',
+    ]
+    
+    # Title keywords that indicate aggregator pages
+    aggregator_title_keywords = [
+        'homepage', 'portal', 'section', 'category',
+        'latest news', 'breaking news', 'daily roundup',
+        'news digest', 'headlines', 'updates',
+        'tech news', 'business news', 'press releases',
+        '| home', '| main', 'welcome to',
+        'industry news', 'market news'
+    ]
+    
+    # Check URL patterns
+    url_lower = url.lower()
+    for pattern in aggregator_url_patterns:
+        if pattern in url_lower:
+            return True
+    
+    # Check if URL is just domain (e.g., https://example.com or https://example.com/)
+    if url_lower.startswith('http'):
+        # Remove protocol to analyze path
+        url_clean = url_lower.split('//', 1)[1]
+        
+        # Count slashes to determine path depth
+        # techcrunch.com -> 0 slashes (aggregator)
+        # techcrunch.com/ -> 1 slash (aggregator)
+        # techcrunch.com/category/ai -> 2 slashes (likely aggregator)
+        # techcrunch.com/2024/05/21/article-title -> 4 slashes (likely article)
+        
+        slash_count = url_clean.count('/')
+        
+        # If path ends with slash, don't count it as depth (it's just a folder)
+        if url_clean.endswith('/'):
+            slash_count -= 1
+            
+        # Strict filter: Root domains and first-level paths (often sections) are aggregators
+        if slash_count <= 1:
+            return True
+            
+        # Medium filter: 2nd level paths often category pages too
+        # e.g. domain.com/news/technology
+        if slash_count <= 2:
+            # Check for suspicious path segments in short URLs
+            suspicious_segments = ['category', 'topic', 'tag', 'author', 'news', 'section']
+            for segment in suspicious_segments:
+                if f"/{segment}/" in url_lower:
+                    return True
+    
+    # Check title keywords
+    title_lower = title.lower()
+    for keyword in aggregator_title_keywords:
+        if keyword in title_lower:
+            return True
+    
+    return False
+
+
 def safe_print(text):
     """
     Safely print text to console, handling Unicode characters that Windows console can't display.
@@ -158,7 +234,28 @@ class NewsSummarizer:
             search_before_date_filter=before_date
         )
         
-        return search.results
+        results = search.results
+        
+        # Filter out aggregator pages if enabled
+        filter_enabled = self.config.get("filter_aggregators", True)
+        if filter_enabled and results:
+            original_count = len(results)
+            filtered_results = []
+            for article in results:
+                # Check if article is an aggregator page
+                url = getattr(article, 'url', None) or (article.url if hasattr(article, 'url') else None)
+                title = getattr(article, 'title', None) or (article.title if hasattr(article, 'title') else None)
+                
+                if url and title and not is_aggregator_page(url, title):
+                    filtered_results.append(article)
+            
+            filtered_count = original_count - len(filtered_results)
+            if filtered_count > 0:
+                print(f"   [FILTER] Removed {filtered_count} aggregator page(s)")
+            
+            results = filtered_results
+        
+        return results
     
     def summarize_article(self, article, max_tokens=None):
         """
